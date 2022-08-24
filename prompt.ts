@@ -38,9 +38,7 @@ const action = (key) => {
   return false;
 };
 
-export interface Closable {
-  close(): void
-}
+
 
 class Prompt extends EventEmitter {
   private in: ReadStream;

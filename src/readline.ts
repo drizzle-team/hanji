@@ -1,5 +1,5 @@
 import { WriteStream, ReadStream } from "tty";
-import { Closable } from "./prompt";
+import { Closable } from ".";
 
 export const prepareReadLine = (): {
   stdin: ReadStream;

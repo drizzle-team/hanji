@@ -1,8 +1,11 @@
 import { ReadStream, WriteStream } from "tty";
-import { Closable } from "./prompt";
 import { prepareReadLine } from "./readline";
 import { cursor } from "sisteransi";
 import { clear } from "./utils";
+
+export interface Closable {
+  close(): void
+}
 
 export abstract class View {
   abstract render(): string;
