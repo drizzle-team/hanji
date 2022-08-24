@@ -1,7 +1,11 @@
 {
   "name": "armin",
   "version": "0.0.1",
-  "description": "",
+  "description": "Designless command line user interface builder",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/drizzle-team/armin"
+  },
   "scripts": {
     "build": "tsc"
   },
