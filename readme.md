@@ -38,9 +38,9 @@ export class BoldBlueTextView extends View {
 render(new BoldBlueTextView("Static bold blue text"))
 ```
 
-You can implement prompts by extending `PromptView` class.
-Below is an example of how to implement `SelectView` with utility `SelectViewData` bundle provided from the library.
-I will provide more view agnostic datasets to make implementing custom views like `input` a breath.
+You can implement prompts by extending `PromptView` class   
+Below is an example of how to implement `SelectView` with utility `SelectViewData` bundle provided from the library   
+I will provide more view agnostic datasets to make implementing custom views like `input` a breath    
 ```typescript
 import color from "kleur";
 import { ITerminal, PromptView, render, SelectViewData } from "armin";
