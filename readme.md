@@ -1,4 +1,4 @@
-Armin is a designless command line user interface builder for nodejs+typescript.
+Hanji is a designless command line user interface builder for nodejs+typescript.
 by [@_alexblokh](https://twitter.com/_alexblokh)
 
 You can create your own static views by extending `View`. You're free to use any 
