@@ -1,46 +1,70 @@
 import { ReadStream, WriteStream } from "tty";
 import { prepareReadLine } from "./readline";
-import { cursor } from "sisteransi";
+import { cursor, erase } from "sisteransi";
 import { clear } from "./utils";
+import throttle from "lodash.throttle";
 
 export interface Closable {
-  close(): void
+  close(): void;
 }
 
-export abstract class View {
-  abstract render(): string;
-}
-
-export abstract class PromptView<RESULT> {
+export abstract class Prompt<RESULT> {
   protected terminal: ITerminal | undefined;
+  private attachCallbacks: ((terminal: ITerminal) => void)[] = [];
+  private detachCallbacks: ((terminal: ITerminal) => void)[] = [];
+  private inputCallbacks: ((str: string | undefined, key: AnyKey) => void)[] =
+    [];
 
-  protected requestLayout() {
+  requestLayout() {
     this.terminal!.requestLayout();
+  }
+
+  on(type: "attach", callback: (terminal: ITerminal) => void): void;
+  on(type: "detach", callback: (terminal: ITerminal) => void): void;
+  on(
+    type: "input",
+    callback: (str: string | undefined, key: AnyKey) => void
+  ): void;
+  on(type: "attach" | "detach" | "input", callback: any): void {
+    if (type === "attach") {
+      this.attachCallbacks.push(callback);
+    } else if (type === "detach") {
+      this.detachCallbacks.push(callback);
+    } else if (type === "input") {
+      this.inputCallbacks.push(callback);
+    }
   }
 
   attach(terminal: ITerminal) {
     this.terminal = terminal;
-    this.onAttach(terminal);
+    this.attachCallbacks.forEach((it) => it(terminal));
   }
 
   detach(terminal: ITerminal) {
-    this.onDetach(terminal);
+    this.detachCallbacks.forEach((it) => it(terminal));
     this.terminal = undefined;
   }
 
-  onInput(str: string | undefined, key: any) {}
+  input(str: string | undefined, key: AnyKey) {
+    this.inputCallbacks.forEach((it) => it(str, key));
+  }
 
   abstract result(): RESULT;
-  abstract onAttach(terminal: ITerminal): void;
-  abstract onDetach(terminal: ITerminal): void;
   abstract render(status: "idle" | "submitted" | "aborted"): string;
 }
 
-export class SelectViewData {
+export class SelectState<T> {
   public selectedIdx = 0;
-  constructor(public readonly items: string[]) {}
+  constructor(public readonly items: T[]) {}
 
-  consume(str: string | undefined, key: any): boolean {
+  bind(prompt: Prompt<any>) {
+    prompt.on("input", (str, key) => {
+      const invalidate = this.consume(str, key);
+      if (invalidate) prompt.requestLayout();
+    });
+  }
+
+  private consume(str: string | undefined, key: AnyKey): boolean {
     if (!key) return false;
 
     if (key.name === "down") {
@@ -79,27 +103,61 @@ export interface ITerminal {
   requestLayout(): void;
 }
 
+type AnyKey = {
+  sequence: string;
+  name: string | undefined;
+  ctrl: boolean;
+  meta: boolean;
+  shift: boolean;
+};
+
+type Prompted<T> =
+  | {
+      data: undefined;
+      status: "aborted";
+    }
+  | {
+      data: T;
+      status: "submitted";
+    };
+
 export class Terminal implements ITerminal {
   private text = "";
   private status: "idle" | "submitted" | "aborted" = "idle";
-  private resolve: (value: {} | PromiseLike<{}>) => void;
-  private reject: (reason?: any) => void;
-  private promise: Promise<{}>;
+  private resolve: (value: Prompted<{}> | PromiseLike<Prompted<{}>>) => void;
+  private promise: Promise<Prompted<{}>>;
+  private renderFunc: (str: string) => void;
 
   constructor(
-    private readonly view: PromptView<any>,
+    private readonly view: Prompt<any>,
     private readonly stdin: ReadStream,
     private readonly stdout: WriteStream,
-    private readonly closabel: Closable
+    private readonly closable: Closable
   ) {
     if (this.stdin.isTTY) this.stdin.setRawMode(true);
 
-    const keypress = (str: string | undefined, key: any) => {
-      if (key["name"] === "c" && key["ctrl"] === true) {
+    const keypress = (str: string | undefined, key: AnyKey) => {
+      // console.log(str, key);
+      if (key.name === "c" && key.ctrl === true) {
+        this.requestLayout();
+        this.view.detach(this);
+        this.tearDown(keypress);
+        if (terminateHandler) {
+          terminateHandler(this.stdin, this.stdout);
+          return;
+        }
+        this.stdout.write(`\n^C\n`);
+        process.exit(1);
+      }
+
+      if (key.name === "escape") {
         // this.stdout.write(beep);
         // this.stdout.write("\n");
+        this.status = "aborted";
+        this.requestLayout();
         this.view.detach(this);
-        this.closabel.close();
+        this.tearDown(keypress);
+        this.resolve({ status: "aborted", data: undefined });
         return;
       }
 
@@ -107,23 +165,31 @@ export class Terminal implements ITerminal {
         this.status = "submitted";
         this.requestLayout();
         this.view.detach(this);
-        this.closabel.close();
-        this.stdin.removeListener("keypress", keypress);
-        if (this.stdin.isTTY) this.stdin.setRawMode(false);
-        this.resolve(this.view.result());
+        this.tearDown(keypress);
+        this.resolve({ status: "submitted", data: this.view.result() });
         return;
       }
 
-      view.onInput(str, key);
+      view.input(str, key);
     };
 
     this.stdin.on("keypress", keypress);
     this.view.attach(this);
 
-    const { resolve, reject, promise } = deferred<{}>();
+    const { resolve, promise } = deferred<Prompted<{}>>();
     this.resolve = resolve;
-    this.reject = reject;
     this.promise = promise;
+
+    this.renderFunc = throttle((str: string) => {
+      this.stdout.write(str);
+    });
+  }
+
+  private tearDown(keypress: (...args: any[]) => void) {
+    this.stdout.write(cursor.show);
+    this.stdin.removeListener("keypress", keypress);
+    if (this.stdin.isTTY) this.stdin.setRawMode(false);
+    this.closable.close();
   }
 
   result(): Promise<{}> {
@@ -139,27 +205,34 @@ export class Terminal implements ITerminal {
   }
 
   requestLayout() {
-    if (this.text) this.stdout.write(clear(this.text, this.stdout.columns));
     const string = this.view.render(this.status);
-
+    const clearPrefix = this.text ? clear(this.text, this.stdout.columns) : "";
     this.text = string;
-    this.stdout.write(string);
+
+    this.renderFunc(`${clearPrefix}${string}`)
   }
 }
 
-export function render(view: PromptView<any>): Promise<any>;
-export function render(view: View): void;
+export function render<T>(view: Prompt<T>): Promise<Prompted<T>>;
 export function render(view: string): void;
 export function render(view: any): any {
   const { stdin, stdout, closable } = prepareReadLine();
-  if (view instanceof PromptView) {
+  if (view instanceof Prompt) {
     const terminal = new Terminal(view, stdin, stdout, closable);
     terminal.requestLayout();
     return terminal.result();
   }
 
-  const data = view instanceof View ? view.render() : view;
-  stdout.write(data);
-  stdout.write("\n");
+  stdout.write(`${view}\n`);
   return;
+}
+
+let terminateHandler:
+  | ((stdin: ReadStream, stdout: WriteStream) => void)
+  | undefined;
+
+export function onTerminate(
+  callback: (stdin: ReadStream, stdout: WriteStream) => void | undefined
+) {
+  terminateHandler = callback;
 }
