@@ -209,7 +209,7 @@ export class Terminal implements ITerminal {
     const clearPrefix = this.text ? clear(this.text, this.stdout.columns) : "";
     this.text = string;
 
-    this.renderFunc(`${clearPrefix}${string}`)
+    this.renderFunc(`${clearPrefix}${string}`);
   }
 }
 
@@ -224,6 +224,7 @@ export function render(view: any): any {
   }
 
   stdout.write(`${view}\n`);
+  closable.close()
   return;
 }
 

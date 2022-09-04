@@ -6,7 +6,7 @@ Below is an example of how to implement `Select` with utility `SelectData` bundl
 I will provide more view agnostic datasets to make implementing custom views like `input` a breath    
 ```typescript
 import color from "kleur";
-import { ITerminal, Prompt, render, SelectData } from "armin";
+import { ITerminal, Prompt, render, SelectData } from "hanji";
 
 export class Select extends Prompt<{ index: number; value: string }> {
   private readonly data: SelectState<{ label: string; value: string }>;
