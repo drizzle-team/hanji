@@ -213,6 +213,62 @@ export class Terminal implements ITerminal {
   }
 }
 
+export abstract class TaskView {
+  protected terminal: TaskTerminal | undefined;
+  private attachCallbacks: ((terminal: TaskTerminal) => void)[] = [];
+  private detachCallbacks: ((terminal: TaskTerminal) => void)[] = [];
+
+  requestLayout() {
+    this.terminal!.requestLayout();
+  }
+
+  attach(terminal: TaskTerminal) {
+    this.terminal = terminal;
+    this.attachCallbacks.forEach((it) => it(terminal));
+  }
+
+  detach(terminal: TaskTerminal) {
+    this.detachCallbacks.forEach((it) => it(terminal));
+    this.terminal = undefined;
+  }
+
+  on(type: "attach", callback: (terminal: TaskTerminal) => void): void;
+  on(type: "detach", callback: (terminal: TaskTerminal) => void): void;
+  on(type: "attach" | "detach" | "input", callback: any): void {
+    if (type === "attach") {
+      this.attachCallbacks.push(callback);
+    } else if (type === "detach") {
+      this.detachCallbacks.push(callback);
+    }
+  }
+
+  abstract render(): string;
+}
+
+export class TaskTerminal {
+  private text = "";
+
+  constructor(
+    private readonly view: TaskView,
+    private readonly stdout: WriteStream
+  ) {
+    this.view.attach(this);
+  }
+
+  requestLayout() {
+    const string = this.view.render();
+    const clearPrefix = this.text ? clear(this.text, this.stdout.columns) : "";
+    this.text = string;
+    this.stdout.write(`${clearPrefix}${string}`);
+  }
+
+  clear() {
+    this.view.detach(this)
+    const clearPrefix = this.text ? clear(this.text, this.stdout.columns) : "";
+    this.stdout.write(`${clearPrefix}`);
+  }
+}
+
 export function render<T>(view: Prompt<T>): Promise<Prompted<T>>;
 export function render(view: string): void;
 export function render(view: any): any {
@@ -224,8 +280,19 @@ export function render(view: any): any {
   }
 
   stdout.write(`${view}\n`);
-  closable.close()
+  closable.close();
   return;
+}
+
+export async function renderWithTask<RESULT>(
+  view: TaskView,
+  task: Promise<RESULT>
+) {
+  const terminal = new TaskTerminal(view, process.stdout);
+  terminal.requestLayout();
+  const result = await task;
+  terminal.clear()
+  return result
 }
 
 let terminateHandler:
