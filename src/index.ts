@@ -242,7 +242,7 @@ export abstract class TaskView {
     }
   }
 
-  abstract render(): string;
+  abstract render(status: "pending" | "done"): string;
 }
 
 export class TaskTerminal {
@@ -256,16 +256,17 @@ export class TaskTerminal {
   }
 
   requestLayout() {
-    const string = this.view.render();
+    const string = this.view.render("pending");
     const clearPrefix = this.text ? clear(this.text, this.stdout.columns) : "";
     this.text = string;
     this.stdout.write(`${clearPrefix}${string}`);
   }
 
   clear() {
-    this.view.detach(this)
+    const string = this.view.render("done");
+    this.view.detach(this);
     const clearPrefix = this.text ? clear(this.text, this.stdout.columns) : "";
-    this.stdout.write(`${clearPrefix}`);
+    this.stdout.write(`${clearPrefix}${string}`);
   }
 }
 
@@ -291,8 +292,8 @@ export async function renderWithTask<RESULT>(
   const terminal = new TaskTerminal(view, process.stdout);
   terminal.requestLayout();
   const result = await task;
-  terminal.clear()
-  return result
+  terminal.clear();
+  return result;
 }
 
 let terminateHandler:
