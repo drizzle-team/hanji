@@ -242,7 +242,10 @@ export abstract class TaskView {
     }
   }
 
-  abstract render(status: "pending" | "done"): string;
+  abstract render<T extends "pending" | "done" | "rejected">(
+    status: T,
+    meta?: T extends "rejected" ? Error : any
+  ): string;
 }
 
 export class TaskTerminal {
@@ -264,6 +267,13 @@ export class TaskTerminal {
 
   clear() {
     const string = this.view.render("done");
+    this.view.detach(this);
+    const clearPrefix = this.text ? clear(this.text, this.stdout.columns) : "";
+    this.stdout.write(`${clearPrefix}${string}`);
+  }
+
+  reject(err: Error) {
+    const string = this.view.render("rejected", err);
     this.view.detach(this);
     const clearPrefix = this.text ? clear(this.text, this.stdout.columns) : "";
     this.stdout.write(`${clearPrefix}${string}`);
@@ -291,9 +301,14 @@ export async function renderWithTask<RESULT>(
 ) {
   const terminal = new TaskTerminal(view, process.stdout);
   terminal.requestLayout();
-  const result = await task;
-  terminal.clear();
-  return result;
+  try {
+    const result = await task;
+    terminal.clear();
+    return result;
+  } catch (err) {
+    terminal.reject(err as Error);
+    process.exit(1);
+  }
 }
 
 let terminateHandler:

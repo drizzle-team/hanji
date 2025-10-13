@@ -1,6 +1,6 @@
 {
   "name": "hanji",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Designless command line user interface builder",
   "repository": {
     "type": "git",
