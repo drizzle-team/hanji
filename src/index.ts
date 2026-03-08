@@ -285,6 +285,16 @@ export function render(view: string): void;
 export function render(view: any): any {
   const { stdin, stdout, closable } = prepareReadLine();
   if (view instanceof Prompt) {
+    if (!stdin.isTTY || !stdout.isTTY) {
+      closable.close();
+      stdout.write(`${view.render("idle")}\n`);
+      return Promise.reject(
+        new Error(
+          "Interactive prompts require a TTY terminal (process.stdin.isTTY or process.stdout.isTTY is false). " +
+          "This can happen when running in CI, piped input, or non-interactive shells."
+        )
+      );
+    }
     const terminal = new Terminal(view, stdin, stdout, closable);
     terminal.requestLayout();
     return terminal.result();
