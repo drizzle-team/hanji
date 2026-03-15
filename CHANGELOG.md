@@ -1,3 +1,6 @@
+### v0.0.7
+error in nonTTY environments
+allow to use Bun native stripANSI and stringWidth
 
 ### v0.0.2
 Added global `onTerminate` callback to gracefully handle CLI termination
