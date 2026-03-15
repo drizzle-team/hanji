@@ -1,25 +1,15 @@
+import readline from "readline";
 import { WriteStream, ReadStream } from "tty";
 import { Closable } from ".";
 
-export const prepareReadLine = (): {
-  stdin: ReadStream;
-  stdout: WriteStream;
-  closable: Closable;
-} => {
-    const stdin = process.stdin;
-    const stdout = process.stdout;
+export const stdin = process.stdin as ReadStream;
+export const stdout = process.stdout as WriteStream;
 
-    const readline = require("readline");
-    const rl = readline.createInterface({
-      input: stdin,
-      escapeCodeTimeout: 50,
-    });
+readline.emitKeypressEvents(stdin);
 
-    readline.emitKeypressEvents(stdin, rl);
-    
-    return {
-      stdin,
-      stdout,
-      closable: rl,
-    };
+export const createClosable = (): Closable => {
+  return readline.createInterface({
+    input: stdin,
+    escapeCodeTimeout: 50,
+  });
 };

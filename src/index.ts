@@ -1,5 +1,5 @@
 import { ReadStream, WriteStream } from "tty";
-import { prepareReadLine } from "./readline";
+import { stdin, stdout, createClosable } from "./readline";
 import { cursor, erase } from "sisteransi";
 import { clear } from "./utils";
 import throttle from "lodash.throttle";
@@ -283,16 +283,21 @@ export class TaskTerminal {
 export function render<T>(view: Prompt<T>): Promise<Prompted<T>>;
 export function render(view: string): void;
 export function render(view: any): any {
-  const { stdin, stdout, closable } = prepareReadLine();
-  if (view instanceof Prompt) {
-    const terminal = new Terminal(view, stdin, stdout, closable);
-    terminal.requestLayout();
-    return terminal.result();
+  if (typeof view === "string") {
+    process.stdout.write(`${view}\n`)
+    return;
+  }
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return Promise.reject(new Error(
+      "Interactive prompts require a TTY terminal (process.stdin.isTTY or process.stdout.isTTY is false). " +
+      "This can happen when running in CI, piped input, or non-interactive shells."
+    ))
   }
 
-  stdout.write(`${view}\n`);
-  closable.close();
-  return;
+  const closable = createClosable();
+  const terminal = new Terminal(view, stdin, stdout, closable);
+  terminal.requestLayout();
+  return terminal.result();
 }
 
 export async function renderWithTask<RESULT>(
