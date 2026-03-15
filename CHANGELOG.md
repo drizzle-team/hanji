@@ -1,4 +1,4 @@
-### v0.0.7
+### v0.0.8
 error in nonTTY environments
 allow to use Bun native stripANSI and stringWidth
 
