@@ -1,6 +1,6 @@
 import { erase, cursor } from "sisteransi";
 
-const strip = (str: string) => {
+export const strip = (str: string) => {
   const pattern = [
     "[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*|[a-zA-Z\\d]+(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?\\u0007)",
     "(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))",
@@ -10,7 +10,24 @@ const strip = (str: string) => {
   return typeof str === "string" ? str.replace(RGX, "") : str;
 };
 
-const stringWidth = (str: string) => [...strip(str)].length;
+export const stripAnsi = (str: string) => {
+  if (typeof Bun !== "undefined" && Bun.stripANSI) {
+    return Bun.stripANSI(str)
+  }
+  return strip(str)
+}
+
+export const fallbackStringWidth = (str: string) => {
+  let len = 0;
+  const stripped = stripAnsi(str);
+  for (const _ of stripped) len++;
+  return len;
+};
+
+export const stringWidth = (str: string) => {
+  if (typeof Bun !== "undefined" && Bun.stringWidth) return Bun.stringWidth(str)
+  return fallbackStringWidth(str)
+}
 
 export const clear = function (prompt: string, perLine: number) {
   if (!perLine) return erase.line + cursor.to(0);

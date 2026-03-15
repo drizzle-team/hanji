@@ -1,6 +1,6 @@
 
 ### v0.0.2
-Added global `onTermite` callback to gracefully handle CLI termination
+Added global `onTerminate` callback to gracefully handle CLI termination
 ```typescript
 import { onTerminate } from "hanji";
 
