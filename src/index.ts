@@ -272,11 +272,28 @@ export class TaskTerminal {
     this.stdout.write(`${clearPrefix}${string}`);
   }
 
-  reject(err: Error) {
+  /**
+   * Renders the task's failure.
+   *
+   * Returns whether the view can report the error at all, which `renderWithTask`
+   * uses to decide if it must print the error itself. The signal is the view's
+   * declared arity: a `render(status)` that never takes the second argument
+   * cannot surface what went wrong, so it renders its in-progress frame and the
+   * failure looks like a task still running. Since `renderWithTask` exits the
+   * process straight after this, an error such a view receives is lost with
+   * nothing printed anywhere.
+   *
+   * Arity is used rather than comparing the rendered strings because a spinner
+   * advances between frames — "rejected" and "pending" output differ by a
+   * character even when the view ignored the error entirely.
+   */
+  reject(err: Error): boolean {
     const string = this.view.render("rejected", err);
     this.view.detach(this);
     const clearPrefix = this.text ? clear(this.text, this.stdout.columns) : "";
     this.stdout.write(`${clearPrefix}${string}`);
+
+    return this.view.render.length >= 2;
   }
 }
 
@@ -311,7 +328,16 @@ export async function renderWithTask<RESULT>(
     terminal.clear();
     return result;
   } catch (err) {
-    terminal.reject(err as Error);
+    const rendered = terminal.reject(err as Error);
+    // Last-resort reporting. `process.exit(1)` below means the caller's own
+    // catch never runs, so if the view chose not to render the error, this is
+    // the point where it would be lost for good — a failed task exiting with a
+    // spinner frame and nothing else. A view that DOES render it (its `render`
+    // receives the error as `meta`) suppresses this, so there is no double
+    // report.
+    if (!rendered) {
+      console.error(err);
+    }
     process.exit(1);
   }
 }
